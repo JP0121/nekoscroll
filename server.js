@@ -67,7 +67,7 @@ app.post('/api/scrape', async (req, res) => {
 
     let browser;
     try {
-        browser = await puppeteer.launch({ headless: false });
+        browser = await puppeteer.launch({ headless: "new" });
         const page = await browser.newPage();
         const imageUrls = new Set();
 
