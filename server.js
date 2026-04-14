@@ -9,12 +9,10 @@ const path = require('path');
 const fs = require('fs');
 const basicAuth = require('express-basic-auth');
 
-// Initialize the Hugging Face AI Brain
-const { HfInference } = require('@huggingface/inference');
-const hf = new HfInference(process.env.HF_TOKEN);
-
 puppeteer.use(StealthPlugin());
 const app = express();
+
+// HOSTINGER FIX 1: Use the cloud-assigned port
 const PORT = process.env.PORT || 3000;
 
 app.use(express.json());
@@ -62,15 +60,16 @@ const upload = multer({ storage: storage });
 
 // --- ENDPOINT 1: Scrape & Auto-Save Instagram URL ---
 app.post('/api/scrape', async (req, res) => {
-    const { url, tags } = req.body; // <-- NEW: Grabbing tags from the frontend
+    const { url, tags } = req.body;
     if (!url || !url.includes('instagram.com/p/')) return res.status(400).json({ error: 'Invalid URL.' });
 
     let browser;
     try {
+        // HOSTINGER FIX 2: Cloud servers require headless mode and disabled sandboxes
         browser = await puppeteer.launch({ 
-    headless: true, 
-    args: ['--no-sandbox', '--disable-setuid-sandbox'] 
-});
+            headless: true,
+            args: ['--no-sandbox', '--disable-setuid-sandbox']
+        });
         const page = await browser.newPage();
         const imageUrls = new Set();
 
@@ -119,7 +118,6 @@ app.post('/api/scrape', async (req, res) => {
         const finalImages = Array.from(imageUrls);
         if (finalImages.length === 0) return res.status(404).json({ error: 'No images found.' });
 
-        // --- MERGE FRONTEND TAGS ---
         const finalTags = tags ? `instagram, scraped, ${tags.toLowerCase()}` : 'instagram, scraped';
 
         const savedImages = [];
@@ -140,7 +138,6 @@ app.post('/api/scrape', async (req, res) => {
                 });
 
                 await new Promise((resolve) => {
-                    // Logs the merged tags into the database
                     db.run(`INSERT INTO images (filename, tags) VALUES (?, ?)`, [filename, finalTags], () => resolve());
                 });
 
@@ -157,69 +154,19 @@ app.post('/api/scrape', async (req, res) => {
     }
 });
 
-// --- ENDPOINT 2: Force Download ---
-app.get('/api/download', (req, res) => {
-    const imageUrl = req.query.url;
-    let fileName = req.query.filename || 'instagram_image'; 
-    if (!imageUrl) return res.status(400).send('No URL provided');
-
-    const isWebp = imageUrl.includes('.webp');
-    const extension = isWebp ? '.webp' : '.jpg';
-    const contentType = isWebp ? 'image/webp' : 'image/jpeg';
-    fileName = fileName.replace(/\.jpg$|\.webp$/i, '');
-    
-    https.get(imageUrl, (response) => {
-        res.setHeader('Content-Disposition', `attachment; filename="${fileName}${extension}"`);
-        res.setHeader('Content-Type', contentType);
-        response.pipe(res);
-    }).on('error', () => res.status(500).send('Error downloading image'));
-});
-
-// --- ENDPOINT 3: Upload Image & AI Auto-Tagging ---
-app.post('/api/upload', upload.single('image'), async (req, res) => {
+// --- ENDPOINT 2: Manual Upload ---
+app.post('/api/upload', upload.single('image'), (req, res) => {
     if (!req.file) return res.status(400).send('No file uploaded.');
-    
-    let manualTags = req.body.tags ? req.body.tags.toLowerCase().split(',').map(t => t.trim()) : [];
+    const tags = req.body.tags ? req.body.tags.toLowerCase() : '';
     const filename = req.file.filename;
-    const filePath = path.join(__dirname, 'public', 'uploads', filename);
 
-    let aiTags = [];
-    
-    try {
-        console.log("Sending image to AI brain...");
-        const imageBuffer = fs.readFileSync(filePath);
-
-        // Switched to a more widely available free-tier model
-        const aiResult = await hf.imageToText({
-            data: imageBuffer,
-            model: 'nlpconnect/vit-gpt2-image-captioning'
-        });
-
-        if (aiResult && aiResult.generated_text) {
-            console.log("AI says:", aiResult.generated_text);
-            
-            aiTags = aiResult.generated_text
-                .toLowerCase()
-                .replace(/[^a-z\s]/g, "") 
-                .split(' ') 
-                .filter(word => word.length > 3); 
-        }
-    } catch (err) {
-        // Log the full error to help us debug if the model is still down
-        console.error('AI Error Details:', err.message);
-        console.log('Falling back to manual tags only.');
-    }
-
-    const combinedTagsArray = manualTags.concat(aiTags);
-    const finalTags = [...new Set(combinedTagsArray)].filter(Boolean).join(', ');
-
-    db.run(`INSERT INTO images (filename, tags) VALUES (?, ?)`, [filename, finalTags], function(err) {
+    db.run(`INSERT INTO images (filename, tags) VALUES (?, ?)`, [filename, tags], function(err) {
         if (err) return res.status(500).send('Database error');
         res.status(200).send('Success');
     });
 });
 
-// --- ENDPOINT 4: Search Database ---
+// --- ENDPOINT 3: Search Database ---
 app.get('/api/search', (req, res) => {
     const query = req.query.q.toLowerCase().trim();
     const keywords = query.split(/\s+/);
@@ -232,7 +179,7 @@ app.get('/api/search', (req, res) => {
     });
 });
 
-// --- ENDPOINT 5: Load Main Gallery ---
+// --- ENDPOINT 4: Load Main Gallery ---
 app.get('/api/gallery', (req, res) => {
     db.all(`SELECT * FROM images ORDER BY id DESC LIMIT 30`, [], (err, rows) => {
         if (err) return res.status(500).json({ error: 'Database error' });
@@ -240,7 +187,7 @@ app.get('/api/gallery', (req, res) => {
     });
 });
 
-// --- ENDPOINT 6: Load Admin Gallery ---
+// --- ENDPOINT 5: Load Admin Gallery ---
 app.get('/api/admin/images', (req, res) => {
     db.all(`SELECT * FROM images ORDER BY id DESC`, [], (err, rows) => {
         if (err) return res.status(500).json({ error: 'Database error' });
@@ -248,7 +195,7 @@ app.get('/api/admin/images', (req, res) => {
     });
 });
 
-// --- ENDPOINT 7: Edit Image Tags ---
+// --- ENDPOINT 6: Edit Image Tags ---
 app.put('/api/update/:id', (req, res) => {
     const id = req.params.id;
     const newTags = req.body.tags.toLowerCase();
@@ -259,7 +206,7 @@ app.put('/api/update/:id', (req, res) => {
     });
 });
 
-// --- ENDPOINT 8: Delete Image & Database Record ---
+// --- ENDPOINT 7: Delete Image ---
 app.delete('/api/delete/:id', (req, res) => {
     const id = req.params.id;
     db.get(`SELECT filename FROM images WHERE id = ?`, [id], (err, row) => {
@@ -274,4 +221,5 @@ app.delete('/api/delete/:id', (req, res) => {
     });
 });
 
-app.listen(PORT, () => console.log(`Server is running! Open http://localhost:${PORT}`));
+// HOSTINGER FIX 3: Bind to 0.0.0.0
+app.listen(PORT, '0.0.0.0', () => console.log(`Server running on port ${PORT}`));
