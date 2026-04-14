@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NekoScroll - Image Board </title>
+    <link rel="icon" type="image/png" href="/favicon.png">
+    <style>
+        /* --- Dark Purple & White Theme --- */
+        :root {
+            --bg-color: #0d0914; 
+            --card-bg: #1a1124;  
+            --accent: #9d4edd;   
+            --trim: #ffffff;     
+            --text-main: #ffffff;
+            --text-muted: #a9a2b5;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            margin: 0;
+            padding: 0;
+        }
+
+        header {
+            background-color: var(--card-bg);
+            padding: 20px;
+            text-align: center;
+            border-bottom: 2px solid var(--trim);
+            box-shadow: 0 4px 15px rgba(157, 78, 221, 0.2);
+        }
+
+        /* Clickable Title */
+        .logo-link {
+            text-decoration: none;
+            color: inherit;
+        }
+
+        h1 {
+            margin: 0;
+            font-size: 30px;
+            letter-spacing: 2px;
+            color: var(--text-main);
+            transition: 0.2s;
+        }
+        
+        h1:hover { text-shadow: 0 0 10px var(--accent); }
+        h1 span { color: var(--accent); }
+
+        .search-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 10px;
+            margin-top: 20px;
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+            position: relative;
+        }
+
+        input[type="text"] {
+            flex: 1;
+            padding: 14px 20px;
+            background-color: #241733;
+            border: 1px solid #3d2b54;
+            border-radius: 30px;
+            color: white;
+            font-size: 16px;
+            transition: all 0.3s;
+        }
+
+        input[type="text"]:focus {
+            outline: none;
+            border-color: var(--trim);
+            box-shadow: 0 0 10px rgba(255, 255, 255, 0.2);
+        }
+
+        button {
+            padding: 14px 25px;
+            background-color: var(--trim);
+            color: var(--bg-color);
+            border: none;
+            border-radius: 30px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+            transition: 0.2s;
+        }
+
+        button:hover {
+            background-color: var(--accent);
+            color: white;
+        }
+
+        /* Hidden settings box */
+        .settings-btn {
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            color: var(--text-muted);
+            padding: 10px;
+        }
+        
+        .settings-btn:hover { color: var(--text-main); }
+
+        #secretSettings {
+            display: none;
+            flex-direction: column; /* Stack the inputs neatly */
+            gap: 10px;
+            background-color: var(--card-bg);
+            padding: 15px;
+            border-radius: 10px;
+            border: 1px solid var(--trim);
+            position: absolute;
+            top: 60px;
+            right: 0;
+            z-index: 10;
+        }
+
+        #secretSettings input {
+            border-radius: 5px;
+            padding: 10px;
+            font-size: 14px;
+        }
+
+        #loader {
+            display: none;
+            text-align: center;
+            margin: 40px 0;
+            color: var(--accent);
+            font-weight: bold;
+            letter-spacing: 1px;
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 0.5; }
+            50% { opacity: 1; }
+            100% { opacity: 0.5; }
+        }
+
+        /* Gallery Grid */
+        .container {
+            padding: 40px 20px;
+            max-width: 1200px;
+            margin: auto;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 20px;
+        }
+
+        .card {
+            background-color: var(--card-bg);
+            border-radius: 12px;
+            overflow: hidden;
+            position: relative;
+            border: 1px solid #3d2b54;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+            transition: transform 0.3s;
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+            border-color: var(--accent);
+        }
+
+        .card img {
+            width: 100%;
+            height: 350px;
+            object-fit: cover;
+            display: block;
+            cursor: zoom-in; 
+        }
+
+        /* Conditional Download Overlay */
+        .download-overlay {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: linear-gradient(transparent, rgba(13, 9, 20, 0.95));
+            padding: 20px;
+            transform: translateY(100%);
+            transition: transform 0.3s ease-in-out;
+            display: flex;
+            justify-content: center;
+        }
+
+        .card:hover .download-overlay {
+            transform: translateY(0);
+        }
+
+        .download-overlay a {
+            background-color: var(--trim);
+            color: var(--bg-color);
+            text-decoration: none;
+            padding: 10px 20px;
+            border-radius: 20px;
+            font-weight: bold;
+            font-size: 14px;
+            transition: 0.2s;
+        }
+        
+        .download-overlay a:hover {
+            background-color: var(--accent);
+            color: white;
+        }
+
+        /* Full Size Image Lightbox */
+        #lightbox {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(13, 9, 20, 0.95);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+            cursor: zoom-out;
+        }
+
+        #lightbox img {
+            max-width: 90%;
+            max-height: 90%;
+            border: 2px solid var(--trim);
+            border-radius: 8px;
+            box-shadow: 0 0 30px rgba(157, 78, 221, 0.4);
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <a href="/" class="logo-link">
+            <h1>Neko<span>Scroll</span></h1>
+        </a>
+        
+        <div class="search-container">
+            <input type="text" id="searchInput" placeholder="Search tags or paste IG link...">
+            <button onclick="processSearch()">Search</button>
+            <button class="settings-btn" onclick="toggleSettings()">⚙️</button>
+
+            <div id="secretSettings">
+                <input type="text" id="nameInput" placeholder="DownSnap Filename">
+                <input type="text" id="tagInput" placeholder="Auto-Tags (comma separated)">
+            </div>
+        </div>
+    </header>
+
+    <div class="container">
+        <div id="loader">Fetching Data... Please wait.</div>
+        <div id="gallery" class="grid">
+            </div>
+    </div>
+
+    <div id="lightbox" onclick="this.style.display='none'">
+        <img id="lightboxImg" src="">
+    </div>
+
+    <script>
+        window.addEventListener('DOMContentLoaded', loadGallery);
+
+        function openLightbox(src) {
+            document.getElementById('lightboxImg').src = src;
+            document.getElementById('lightbox').style.display = 'flex';
+        }
+
+        function toggleSettings() {
+            const settings = document.getElementById('secretSettings');
+            // Toggle to flex so the gap and column rules apply
+            settings.style.display = settings.style.display === 'flex' ? 'none' : 'flex';
+        }
+
+        document.getElementById("searchInput").addEventListener("keypress", function(event) {
+            if (event.key === "Enter") {
+                event.preventDefault();
+                processSearch();
+            }
+        });
+
+        // Dynamic rendering engine to handle download buttons correctly
+        function renderCards(images, isInstagramScrape, customName = '') {
+            const gallery = document.getElementById('gallery');
+            gallery.innerHTML = '';
+
+            if (images.length === 0) {
+                gallery.innerHTML = '<p style="text-align:center; width:100%; color:var(--text-muted);">No images found.</p>';
+                return;
+            }
+
+            images.forEach((img, index) => {
+                const card = document.createElement('div');
+                card.className = 'card';
+                
+                // Read the filename correctly from the backend object
+                const filename = img.filename ? img.filename : img;
+                const srcPath = `/uploads/${filename}`;
+                
+                // Base HTML: The clickable image for the Lightbox
+                let cardHTML = `<img src="${srcPath}" alt="Anime Art" onclick="openLightbox('${srcPath}')">`;
+
+                // ONLY attach download buttons if it's an Instagram Scrape
+                if (isInstagramScrape) {
+                    const dlName = `${customName || 'DownSnap'}_${index + 1}`;
+                    cardHTML += `
+                        <div class="download-overlay">
+                            <a href="${srcPath}" download="${dlName}" onclick="event.stopPropagation()">⬇️ Download ${dlName}</a>
+                        </div>
+                    `;
+                }
+
+                card.innerHTML = cardHTML;
+                gallery.appendChild(card);
+            });
+        }
+
+        async function loadGallery() {
+            try {
+                const response = await fetch('/api/gallery');
+                const data = await response.json();
+                renderCards(data.images, false); // False = No download buttons
+            } catch (error) {
+                console.error('Failed to load gallery:', error);
+            }
+        }
+
+        async function processSearch() {
+            const inputVal = document.getElementById('searchInput').value.trim();
+            const customName = document.getElementById('nameInput').value.trim();
+            const customTags = document.getElementById('tagInput').value.trim(); // NEW
+            const loader = document.getElementById('loader');
+
+            if (!inputVal) return;
+            document.getElementById('gallery').innerHTML = ''; 
+            loader.style.display = 'block';
+
+            const isIG = inputVal.includes('instagram.com/p/');
+            const endpoint = isIG ? '/api/scrape' : `/api/search?q=${encodeURIComponent(inputVal)}`;
+            const method = isIG ? 'POST' : 'GET';
+            // NEW: Pass customTags in the body if it's an IG link
+            const body = isIG ? JSON.stringify({ url: inputVal, tags: customTags }) : null;
+
+            try {
+                const response = await fetch(endpoint, {
+                    method: method,
+                    headers: body ? { 'Content-Type': 'application/json' } : {},
+                    body: body
+                });
+                const data = await response.json();
+                loader.style.display = 'none';
+
+                if (data.error) {
+                    alert('Error: ' + data.error);
+                    return;
+                }
+
+                // isIG flag tells the renderer whether to attach download buttons
+                renderCards(data.images, isIG, customName);
+
+            } catch (error) {
+                loader.style.display = 'none';
+                alert('Server connection failed!');
+            }
+        }
+    </script>
+</body>
+</html>

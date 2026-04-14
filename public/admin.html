@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DownSnap - Admin Dashboard</title>
+    <link rel="icon" type="image/x-icon" href="/favicon.ico">
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #0f0f13; color: white; padding: 40px; margin: 0; }
+        .container { max-width: 1000px; margin: auto; background: #1a1a24; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
+        
+        .header-flex { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        h1 { margin: 0; color: #ff2a5f; }
+
+        /* The Back Button */
+        .btn-back { background: #3d3d4e; color: white; text-decoration: none; padding: 10px 20px; border-radius: 30px; font-weight: bold; font-size: 14px; transition: 0.2s; }
+        .btn-back:hover { background: #4e4e61; }
+
+        /* Upload Section Styles */
+        .upload-section { background: #2a2a36; padding: 20px; border-radius: 8px; margin-bottom: 30px; border: 1px solid #3d3d4e; }
+        .upload-section h3 { margin-top: 0; }
+        input[type="file"], input[type="text"] { width: calc(100% - 20px); margin-bottom: 10px; padding: 10px; border-radius: 5px; border: 1px solid #3d3d4e; background: #1a1a24; color: white; }
+        
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { border-bottom: 1px solid #3d3d4e; padding: 15px; text-align: left; }
+        th { background: #2a2a36; color: #8b8b9e; }
+        img { max-width: 120px; border-radius: 6px; }
+        .tag-badge { background: #3d3d4e; padding: 5px 10px; border-radius: 15px; font-size: 12px; margin-right: 5px; display: inline-block; margin-bottom: 5px; }
+        
+        button { background: #ff2a5f; color: white; border: none; padding: 8px 15px; border-radius: 5px; cursor: pointer; font-weight: bold; margin-right: 5px; }
+        button:hover { background: #e01f4f; }
+        .btn-edit { background: #0095f6; }
+        .btn-edit:hover { background: #007bb5; }
+        .empty-state { text-align: center; color: #8b8b9e; padding: 20px; }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <div class="header-flex">
+            <h1>⚙️ Dashboard & Uploader</h1>
+            <a href="/" class="btn-back">← Back to NekoScroll</a>
+        </div>
+        
+        <div class="upload-section">
+            <h3>Upload New Image</h3>
+            <form id="uploadForm">
+                <input type="file" id="imageFile" accept="image/*" required>
+                <input type="text" id="imageTags" placeholder="Manual Tags (comma separated)">
+                <button type="submit" id="uploadBtn">Upload Image</button>
+                <span id="status" style="margin-left: 15px; font-weight: bold; color: #8b8b9e;"></span>
+            </form>
+        </div>
+
+        <h3>Database Management</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Image Preview</th>
+                    <th>Search Tags</th>
+                    <th>Filename</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody id="tableBody"></tbody>
+        </table>
+    </div>
+
+    <script>
+        window.addEventListener('DOMContentLoaded', loadAdminData);
+
+        // --- Handle Image Uploads ---
+        document.getElementById('uploadForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const status = document.getElementById('status');
+            const file = document.getElementById('imageFile').files[0];
+            const tags = document.getElementById('imageTags').value;
+
+            const formData = new FormData();
+            formData.append('image', file);
+            formData.append('tags', tags);
+
+            status.innerText = "Uploading...";
+            document.getElementById('uploadBtn').disabled = true;
+
+            try {
+                const response = await fetch('/api/upload', { method: 'POST', body: formData });
+                if (response.ok) {
+                    status.innerText = "Upload successful!";
+                    status.style.color = "#28a745";
+                    document.getElementById('uploadForm').reset();
+                    loadAdminData(); 
+                } else {
+                    status.innerText = "Upload failed.";
+                    status.style.color = "#ff2a5f";
+                }
+            } catch(e) {
+                status.innerText = "Server error.";
+            }
+            document.getElementById('uploadBtn').disabled = false;
+        });
+
+        // --- Load the Table Data ---
+        async function loadAdminData() {
+            const tbody = document.getElementById('tableBody');
+            try {
+                const response = await fetch('/api/admin/images');
+                const data = await response.json();
+                tbody.innerHTML = '';
+
+                if (data.images.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="4" class="empty-state">Database is empty.</td></tr>';
+                    return;
+                }
+
+                data.images.forEach(img => {
+                    const tagList = img.tags ? img.tags.split(',') : [];
+                    const tagBadges = tagList.map(tag => `<span class="tag-badge">${tag.trim()}</span>`).join('');
+
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td><img src="/uploads/${img.filename}" alt="preview"></td>
+                        <td>${tagBadges || '<span style="color:#8b8b9e">No tags</span>'}</td>
+                        <td style="color: #8b8b9e; font-size: 14px;">${img.filename}</td>
+                        <td>
+                            <button class="btn-edit" onclick="editTags(${img.id}, '${img.tags ? img.tags.replace(/'/g, "\\'") : ''}')">Edit</button>
+                            <button onclick="deleteImage(${img.id})">Delete</button>
+                        </td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            } catch (error) {
+                tbody.innerHTML = '<tr><td colspan="4" class="empty-state">Error loading database.</td></tr>';
+            }
+        }
+
+        // --- Handle Editing Tags ---
+        async function editTags(id, currentTags) {
+            const newTags = prompt("Update tags (comma separated):", currentTags);
+            if (newTags === null || newTags === currentTags) return;
+
+            try {
+                const response = await fetch(`/api/update/${id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ tags: newTags })
+                });
+
+                if (response.ok) {
+                    loadAdminData(); 
+                } else {
+                    alert('Failed to update tags.');
+                }
+            } catch (error) {
+                alert('Server error.');
+            }
+        }
+
+        // --- Handle Deleting Images ---
+        async function deleteImage(id) {
+            if (!confirm('Are you sure you want to permanently delete this image?')) return;
+            try {
+                const response = await fetch(`/api/delete/${id}`, { method: 'DELETE' });
+                if (response.ok) {
+                    loadAdminData(); 
+                } else {
+                    alert('Failed to delete image.');
+                }
+            } catch (error) {
+                alert('Server error.');
+            }
+        }
+    </script>
+</body>
+</html>
