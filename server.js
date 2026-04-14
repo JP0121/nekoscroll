@@ -15,7 +15,7 @@ const hf = new HfInference(process.env.HF_TOKEN);
 
 puppeteer.use(StealthPlugin());
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 
 app.use(express.json());
 
@@ -67,7 +67,10 @@ app.post('/api/scrape', async (req, res) => {
 
     let browser;
     try {
-        browser = await puppeteer.launch({ headless: "new" });
+        browser = await puppeteer.launch({ 
+    headless: true, 
+    args: ['--no-sandbox', '--disable-setuid-sandbox'] 
+});
         const page = await browser.newPage();
         const imageUrls = new Set();
 
