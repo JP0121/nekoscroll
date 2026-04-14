@@ -51,6 +51,31 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage: storage });
 
+// --- AUTO-SYNC FOLDER TO DATABASE ---
+function syncDatabase() {
+    const uploadsDir = path.join(__dirname, 'public', 'uploads');
+    if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
+
+    const files = fs.readdirSync(uploadsDir).filter(file => file.match(/\.(jpg|jpeg|png|webp|gif)$/i));
+    const db = getDb();
+    let updated = false;
+
+    files.forEach(file => {
+        // If the file isn't in the database yet, add it!
+        const exists = db.find(img => img.filename === file);
+        if (!exists) {
+            const newId = db.length > 0 ? Math.max(...db.map(img => img.id)) + 1 : 1;
+            db.push({ id: newId, filename: file, tags: 'recovered, auto-sync' });
+            updated = true;
+        }
+    });
+
+    if (updated) {
+        saveDb(db);
+        console.log("Database synced! Found and registered new images.");
+    }
+}
+syncDatabase(); // Run the sync every time the server boots
 // --- ENDPOINTS ---
 
 // The scraper is temporarily disabled to prevent Hostinger crashes
