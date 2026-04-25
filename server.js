@@ -94,7 +94,7 @@ app.post('/api/scrape', async (req, res) => {
     try {
         // 1. Send the URL to Apify's Official Instagram Scraper
         // We use their synchronous endpoint so it waits for the scrape to finish before replying
-        const apifyUrl = `https://api.apify.com/v2/acts/apify~instagram-scraper/run-sync-get-dataset?token=${process.env.APIFY_TOKEN}`;
+        const apifyUrl = `https://api.apify.com/v2/acts/apify~instagram-scraper/run-sync-get-dataset-items?token=${process.env.APIFY_TOKEN}`;
         
         const apiResponse = await fetch(apifyUrl, {
             method: 'POST',
