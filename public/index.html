@@ -250,7 +250,41 @@
             border-radius: 8px;
             box-shadow: 0 0 30px rgba(157, 78, 221, 0.4);
         }
+        /* --- FOOTER STYLES --- */
+.site-footer {
+    background-color: #0a080c; /* Extra deep dark purple/black */
+    color: #8b8898;
+    text-align: center;
+    padding: 3rem 1rem 2rem 1rem;
+    margin-top: 4rem;
+    border-top: 1px solid #2a2438;
+}
+
+.footer-content p {
+    margin: 0.5rem 0;
+    font-size: 0.9rem;
+    letter-spacing: 0.5px;
+}
+
+.brand-link, .footer-links a {
+    color: #bfa3f0; /* Soft neon purple */
+    text-decoration: none;
+    transition: all 0.3s ease;
+}
+
+.brand-link:hover, .footer-links a:hover {
+    color: #ffffff;
+    text-shadow: 0 0 8px rgba(191, 163, 240, 0.6); /* Adds a subtle glow */
+}
+
+.footer-links {
+    margin-top: 1.5rem;
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
     </style>
+    
 </head>
 <body>
 
@@ -424,5 +458,15 @@
             }
         }
     </script>
+    <footer class="site-footer">
+    <div class="footer-content">
+        <p>&copy; 2026 NekoScroll VIP Gallery. All rights reserved.</p>
+        <p>Infrastructure powered by <a href="https://lapisforge.com" target="_blank" class="brand-link">Lapis Forge</a> | Detroit, MI</p>
+        
+        <div class="footer-links">
+            <a href="mailto:contact@lapisforge.com">Contact Admin</a>
+        </div>
+    </div>
+</footer>
 </body>
 </html>
