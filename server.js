@@ -104,13 +104,29 @@ app.post('/api/scrape', async (req, res) => {
 
         const data = await apiResponse.json();
 
-        // 2. The "Smart Extractor" - Scans the raw JSON for any high-res image links
-        const rawJsonString = JSON.stringify(data);
-        const urlRegex = /(https?:\/\/[^"'\s]+?\.(?:jpg|jpeg|webp)(?:\?[^"'\s]*)?)/gi;
-        let matches = rawJsonString.match(urlRegex) || [];
+        // 2. The "Recursive Extractor" - Hunts through the JSON object for image links
+        let rawImages = [];
         
-        // Filter out tiny thumbnails or profile pictures
-        let finalImages = [...new Set(matches)].filter(img => !img.includes('150x150') && !img.includes('profile_pic'));
+        function findImageUrls(obj) {
+            for (let key in obj) {
+                if (typeof obj[key] === 'string') {
+                    // Look for strings that are web links and contain image markers
+                    if (obj[key].startsWith('http') && (obj[key].includes('.jpg') || obj[key].includes('.webp') || obj[key].includes('scontent'))) {
+                        rawImages.push(obj[key]);
+                    }
+                } else if (typeof obj[key] === 'object' && obj[key] !== null) {
+                    // If it's a nested folder, dig deeper
+                    findImageUrls(obj[key]);
+                }
+            }
+        }
+        
+        findImageUrls(data); // Start the hunt
+
+        // Clean up escaped slashes, remove duplicates, and filter out tiny thumbnails
+        let finalImages = [...new Set(rawImages)]
+            .map(url => url.replace(/\\\//g, '/')) 
+            .filter(img => !img.includes('150x150') && !img.includes('profile_pic') && !img.includes('e35/c'));
 
         if (finalImages.length === 0) {
             console.error("API Response data:", data); // Logs to Hostinger if the API changes its format
