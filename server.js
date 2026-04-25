@@ -92,11 +92,11 @@ app.post('/api/scrape', async (req, res) => {
 
     try {
         // 1. Send the URL to your RapidAPI Scraper
-        const apiResponse = await fetch('https://cheap-instagram-scraper-api1.p.rapidapi.com/api/download?best=true', {
+        const apiResponse = await fetch('https://instagram-scraper-20253.p.rapidapi.com/user-tag/?username_or_id_or_url=217867189', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'x-rapidapi-host': 'cheap-instagram-scraper-api1.p.rapidapi.com',
+                'x-rapidapi-host': 'instagram-scraper-20253.p.rapidapi.com',
                 'x-rapidapi-key': process.env.RAPIDAPI_KEY
             },
             body: JSON.stringify({ url: url }) 
