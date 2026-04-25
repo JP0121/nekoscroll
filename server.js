@@ -92,14 +92,15 @@ app.post('/api/scrape', async (req, res) => {
 
     try {
         // 1. Send the URL to your RapidAPI Scraper
-        const apiResponse = await fetch('https://instagram-scraper-20253.p.rapidapi.com/user-tag/?username_or_id_or_url=217867189', {
-            method: 'POST',
+        // We use encodeURIComponent so the slashes in the Instagram link don't break the API URL
+        const apiUrl = `https://instagram-scraper-20253.p.rapidapi.com/user-tag/?username_or_id_or_url=${encodeURIComponent(url)}`;
+        
+        const apiResponse = await fetch(apiUrl, {
+            method: 'GET', // Changed to GET!
             headers: {
-                'Content-Type': 'application/json',
                 'x-rapidapi-host': 'instagram-scraper-20253.p.rapidapi.com',
                 'x-rapidapi-key': process.env.RAPIDAPI_KEY
-            },
-            body: JSON.stringify({ url: url }) 
+            }
         });
 
         const data = await apiResponse.json();
