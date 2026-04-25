@@ -92,7 +92,7 @@ app.post('/api/scrape', async (req, res) => {
 
     try {
         // 1. Send the URL to your RapidAPI Scraper
-        const apiResponse = await fetch('https://cheap-instagram-scraper-api1.p.rapidapi.com/api/check_link', {
+        const apiResponse = await fetch('https://cheap-instagram-scraper-api1.p.rapidapi.com/api/download?best=true', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
