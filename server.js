@@ -76,9 +76,10 @@ function syncDatabase() {
     }
 }
 syncDatabase(); // Run the sync every time the server boots
+
 // --- ENDPOINTS ---
 
-// --- ENDPOINT 1: Scrape & Auto-Save Instagram URL (API Version) ---
+// --- ENDPOINT 1: Scrape & Auto-Save Instagram URL (Enterprise Apify Version) ---
 app.post('/api/scrape', async (req, res) => {
     const { url, tags } = req.body;
     
@@ -86,52 +87,52 @@ app.post('/api/scrape', async (req, res) => {
         return res.status(400).json({ error: 'Invalid URL. Please use an Instagram post link.' });
     }
 
-    if (!process.env.RAPIDAPI_KEY) {
-        return res.status(500).json({ error: 'RAPIDAPI_KEY is missing in Hostinger Environment Variables.' });
+    if (!process.env.APIFY_TOKEN) {
+        return res.status(500).json({ error: 'APIFY_TOKEN is missing in Hostinger Environment Variables.' });
     }
 
     try {
-        // 1. Send the URL to your RapidAPI Scraper
-        // We use encodeURIComponent so the slashes in the Instagram link don't break the API URL
-        const apiUrl = `https://instagram-scraper-20253.p.rapidapi.com/user-tag/?username_or_id_or_url=${encodeURIComponent(url)}`;
+        // 1. Send the URL to Apify's Official Instagram Scraper
+        // We use their synchronous endpoint so it waits for the scrape to finish before replying
+        const apifyUrl = `https://api.apify.com/v2/acts/apify~instagram-scraper/run-sync-get-dataset?token=${process.env.APIFY_TOKEN}`;
         
-        const apiResponse = await fetch(apiUrl, {
-            method: 'GET', // Changed to GET!
-            headers: {
-                'x-rapidapi-host': 'instagram-scraper-20253.p.rapidapi.com',
-                'x-rapidapi-key': process.env.RAPIDAPI_KEY
-            }
+        const apiResponse = await fetch(apifyUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                directUrls: [url],
+                resultsType: "details",
+                searchType: "hashtag" // Required by Apify even for direct URLs
+            }) 
         });
 
         const data = await apiResponse.json();
 
-        // 2. The "Recursive Extractor" - Hunts through the JSON object for image links
+        // 2. The "Recursive Extractor" - Hunts through the Apify JSON for image links
         let rawImages = [];
         
         function findImageUrls(obj) {
             for (let key in obj) {
                 if (typeof obj[key] === 'string') {
-                    // Look for strings that are web links and contain image markers
                     if (obj[key].startsWith('http') && (obj[key].includes('.jpg') || obj[key].includes('.webp') || obj[key].includes('scontent'))) {
                         rawImages.push(obj[key]);
                     }
                 } else if (typeof obj[key] === 'object' && obj[key] !== null) {
-                    // If it's a nested folder, dig deeper
                     findImageUrls(obj[key]);
                 }
             }
         }
         
-        findImageUrls(data); // Start the hunt
+        findImageUrls(data);
 
-        // Clean up escaped slashes, remove duplicates, and filter out tiny thumbnails
+        // Clean up links and filter out tiny profile pics
         let finalImages = [...new Set(rawImages)]
             .map(url => url.replace(/\\\//g, '/')) 
             .filter(img => !img.includes('150x150') && !img.includes('profile_pic') && !img.includes('e35/c'));
 
         if (finalImages.length === 0) {
-            console.error("API Response data:", data); // Logs to Hostinger if the API changes its format
-            return res.status(404).json({ error: 'No high-res images found in the API response.' });
+            console.error("Apify Data Dump:", JSON.stringify(data).substring(0, 500)); // Log a snippet to avoid crashing logs
+            return res.status(404).json({ error: 'Apify ran successfully, but found no high-res images.' });
         }
 
         // 3. Download the images and save them to the JSON Database
@@ -142,20 +143,16 @@ app.post('/api/scrape', async (req, res) => {
         for (let i = 0; i < finalImages.length; i++) {
             const imgUrl = finalImages[i];
             const ext = imgUrl.includes('.webp') ? '.webp' : '.jpg';
-            
-            // Rebranded filename format!
             const filename = `obsession-ig-${Date.now()}-${i}${ext}`; 
             const filePath = path.join(__dirname, 'public', 'uploads', filename);
 
             try {
-                // Download image using Node 20's native fetch
                 const imgRes = await fetch(imgUrl);
-                if (!imgRes.ok) throw new Error('Failed to download image from API link');
+                if (!imgRes.ok) throw new Error('Failed to download image from Apify link');
                 
                 const buffer = await imgRes.arrayBuffer();
                 fs.writeFileSync(filePath, Buffer.from(buffer));
 
-                // Register to database
                 const newId = db.length > 0 ? Math.max(...db.map(img => img.id)) + 1 : 1;
                 db.push({ id: newId, filename: filename, tags: finalTags });
                 savedImages.push({ filename: filename });
@@ -165,12 +162,12 @@ app.post('/api/scrape', async (req, res) => {
             }
         }
         
-        saveDb(db); // Commit changes to gallery.json
+        saveDb(db); 
         res.json({ images: savedImages });
 
     } catch (error) {
-        console.error('Scrape error:', error);
-        res.status(500).json({ error: 'API Scrape failed. Check Hostinger logs.' });
+        console.error('Apify Scrape error:', error);
+        res.status(500).json({ error: 'Apify Scrape failed. Check Hostinger logs.' });
     }
 });
 
