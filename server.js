@@ -78,22 +78,83 @@ function syncDatabase() {
 syncDatabase(); // Run the sync every time the server boots
 // --- ENDPOINTS ---
 
-// The scraper is temporarily disabled to prevent Hostinger crashes
+// --- ENDPOINT 1: Scrape & Auto-Save Instagram URL (API Version) ---
 app.post('/api/scrape', async (req, res) => {
-    res.status(500).json({ error: 'Puppeteer blocked by Hostinger. Upgrade to API Scraper required.' });
-});
-
-app.post('/api/upload', upload.single('image'), (req, res) => {
-    if (!req.file) return res.status(400).send('No file uploaded.');
-    const tags = req.body.tags ? req.body.tags.toLowerCase() : '';
-    const filename = req.file.filename;
-
-    const db = getDb();
-    const newId = db.length > 0 ? Math.max(...db.map(img => img.id)) + 1 : 1;
-    db.push({ id: newId, filename, tags });
-    saveDb(db);
+    const { url, tags } = req.body;
     
-    res.status(200).send('Success');
+    if (!url || !url.includes('instagram.com/p/')) {
+        return res.status(400).json({ error: 'Invalid URL. Please use an Instagram post link.' });
+    }
+
+    if (!process.env.RAPIDAPI_KEY) {
+        return res.status(500).json({ error: 'RAPIDAPI_KEY is missing in Hostinger Environment Variables.' });
+    }
+
+    try {
+        // 1. Send the URL to your RapidAPI Scraper
+        const apiResponse = await fetch('https://cheap-instagram-scraper-api1.p.rapidapi.com/api/check_link', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'x-rapidapi-host': 'cheap-instagram-scraper-api1.p.rapidapi.com',
+                'x-rapidapi-key': process.env.RAPIDAPI_KEY
+            },
+            body: JSON.stringify({ url: url }) 
+        });
+
+        const data = await apiResponse.json();
+
+        // 2. The "Smart Extractor" - Scans the raw JSON for any high-res image links
+        const rawJsonString = JSON.stringify(data);
+        const urlRegex = /(https?:\/\/[^"'\s]+?\.(?:jpg|jpeg|webp)(?:\?[^"'\s]*)?)/gi;
+        let matches = rawJsonString.match(urlRegex) || [];
+        
+        // Filter out tiny thumbnails or profile pictures
+        let finalImages = [...new Set(matches)].filter(img => !img.includes('150x150') && !img.includes('profile_pic'));
+
+        if (finalImages.length === 0) {
+            console.error("API Response data:", data); // Logs to Hostinger if the API changes its format
+            return res.status(404).json({ error: 'No high-res images found in the API response.' });
+        }
+
+        // 3. Download the images and save them to the JSON Database
+        const finalTags = tags ? `instagram, scraped, ${tags.toLowerCase()}` : 'instagram, scraped';
+        const savedImages = [];
+        const db = getDb();
+
+        for (let i = 0; i < finalImages.length; i++) {
+            const imgUrl = finalImages[i];
+            const ext = imgUrl.includes('.webp') ? '.webp' : '.jpg';
+            
+            // Rebranded filename format!
+            const filename = `obsession-ig-${Date.now()}-${i}${ext}`; 
+            const filePath = path.join(__dirname, 'public', 'uploads', filename);
+
+            try {
+                // Download image using Node 20's native fetch
+                const imgRes = await fetch(imgUrl);
+                if (!imgRes.ok) throw new Error('Failed to download image from API link');
+                
+                const buffer = await imgRes.arrayBuffer();
+                fs.writeFileSync(filePath, Buffer.from(buffer));
+
+                // Register to database
+                const newId = db.length > 0 ? Math.max(...db.map(img => img.id)) + 1 : 1;
+                db.push({ id: newId, filename: filename, tags: finalTags });
+                savedImages.push({ filename: filename });
+
+            } catch (err) {
+                console.error('Failed to auto-save image:', err);
+            }
+        }
+        
+        saveDb(db); // Commit changes to gallery.json
+        res.json({ images: savedImages });
+
+    } catch (error) {
+        console.error('Scrape error:', error);
+        res.status(500).json({ error: 'API Scrape failed. Check Hostinger logs.' });
+    }
 });
 
 app.get('/api/search', (req, res) => {
