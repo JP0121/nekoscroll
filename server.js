@@ -87,13 +87,26 @@ app.post('/api/scrape', async (req, res) => {
         return res.status(400).json({ error: 'Invalid URL. Please use an Instagram post link.' });
     }
 
+    // --- NEW: THE SMART CACHE ---
+    // 1. Clean the URL (Removes tracking tags so we can accurately check for duplicates)
+    const cleanUrl = url.split('?')[0]; 
+    
+    // 2. Check the database before hitting Apify
+    const db = getDb();
+    const existingImages = db.filter(img => img.source_url === cleanUrl);
+
+    if (existingImages.length > 0) {
+        console.log("Post already scraped! Loading from local database to save Apify credits.");
+        return res.json({ images: existingImages }); // Instantly returns your saved photos!
+    }
+    // ----------------------------
+
     if (!process.env.APIFY_TOKEN) {
         return res.status(500).json({ error: 'APIFY_TOKEN is missing in Hostinger Environment Variables.' });
     }
 
     try {
-        // 1. Send the URL to Apify's Official Instagram Scraper
-        // We use their synchronous endpoint so it waits for the scrape to finish before replying
+        // Send the URL to Apify
         const apifyUrl = `https://api.apify.com/v2/acts/apify~instagram-scraper/run-sync-get-dataset-items?token=${process.env.APIFY_TOKEN}`;
         
         const apiResponse = await fetch(apifyUrl, {
@@ -102,15 +115,14 @@ app.post('/api/scrape', async (req, res) => {
             body: JSON.stringify({
                 directUrls: [url],
                 resultsType: "details",
-                searchType: "hashtag" // Required by Apify even for direct URLs
+                searchType: "hashtag" 
             }) 
         });
 
         const data = await apiResponse.json();
 
-        // 2. The "Recursive Extractor" - Hunts through the Apify JSON for image links
+        // The Recursive Extractor
         let rawImages = [];
-        
         function findImageUrls(obj) {
             for (let key in obj) {
                 if (typeof obj[key] === 'string') {
@@ -122,23 +134,20 @@ app.post('/api/scrape', async (req, res) => {
                 }
             }
         }
-        
         findImageUrls(data);
 
-        // Clean up links and filter out tiny profile pics
         let finalImages = [...new Set(rawImages)]
             .map(url => url.replace(/\\\//g, '/')) 
             .filter(img => !img.includes('150x150') && !img.includes('profile_pic') && !img.includes('e35/c'));
 
         if (finalImages.length === 0) {
-            console.error("Apify Data Dump:", JSON.stringify(data).substring(0, 500)); // Log a snippet to avoid crashing logs
+            console.error("Apify Data Dump:", JSON.stringify(data).substring(0, 500)); 
             return res.status(404).json({ error: 'Apify ran successfully, but found no high-res images.' });
         }
 
-        // 3. Download the images and save them to the JSON Database
+        // Download and save
         const finalTags = tags ? `instagram, scraped, ${tags.toLowerCase()}` : 'instagram, scraped';
         const savedImages = [];
-        const db = getDb();
 
         for (let i = 0; i < finalImages.length; i++) {
             const imgUrl = finalImages[i];
@@ -154,7 +163,9 @@ app.post('/api/scrape', async (req, res) => {
                 fs.writeFileSync(filePath, Buffer.from(buffer));
 
                 const newId = db.length > 0 ? Math.max(...db.map(img => img.id)) + 1 : 1;
-                db.push({ id: newId, filename: filename, tags: finalTags });
+                
+                // --- NEW: Add the cleanUrl to the database so we remember it later ---
+                db.push({ id: newId, filename: filename, tags: finalTags, source_url: cleanUrl });
                 savedImages.push({ filename: filename });
 
             } catch (err) {
